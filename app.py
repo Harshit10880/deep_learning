@@ -1,13 +1,11 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import joblib
-
 from tensorflow.keras.models import load_model
 
-# =====================================================
+# ======================================
 # PAGE CONFIG
-# =====================================================
+# ======================================
 
 st.set_page_config(
     page_title="Bank Deposit Prediction",
@@ -15,149 +13,158 @@ st.set_page_config(
     layout="wide"
 )
 
-# =====================================================
-# LOAD MODEL FILES
-# =====================================================
+# ======================================
+# LOAD FILES
+# ======================================
 
 model = load_model("model_deep.keras")
-
 scaler = joblib.load("scaler_deep.pkl")
-
 feature_columns = joblib.load("feature_columns_deep.pkl")
 
-# =====================================================
+# ======================================
 # HEADER
-# =====================================================
+# ======================================
 
-st.title("🏦 Bank Deposit Prediction System")
+st.title("🏦 Bank Deposit Prediction Using Deep Learning")
 
-st.markdown("""
-Predict whether a customer will subscribe
-to a term deposit using a Deep Neural Network.
-""")
+st.write(
+    """
+    Upload a customer dataset and predict whether
+    the customer will subscribe to a term deposit.
+    """
+)
 
-# =====================================================
+# ======================================
+# MODEL INFO
+# ======================================
+
+st.info(
+    """
+    Deep Neural Network (DNN)
+
+    Accuracy: Enter your actual accuracy here
+    Example: 88.45%
+    """
+)
+
+# ======================================
 # FILE UPLOAD
-# =====================================================
+# ======================================
 
 uploaded_file = st.file_uploader(
     "Upload CSV File",
     type=["csv"]
 )
 
-# =====================================================
-# PROCESS FILE
-# =====================================================
+# ======================================
+# PREDICTION
+# ======================================
 
 if uploaded_file is not None:
 
-    data = pd.read_csv(uploaded_file)
+    df = pd.read_csv(uploaded_file)
 
-    st.subheader("Uploaded Data")
+    st.subheader("Dataset Preview")
 
-    st.dataframe(data.head())
+    st.dataframe(df.head())
 
     if st.button("Predict"):
 
-        prediction_data = data.copy()
+        input_data = df.copy()
 
-        # -------------------------------------------
-        # Remove target if exists
-        # -------------------------------------------
-
-        if "deposit" in prediction_data.columns:
-            prediction_data.drop(
-                columns=["deposit"],
-                inplace=True
+        # Remove target if present
+        if "deposit" in input_data.columns:
+            input_data = input_data.drop(
+                columns=["deposit"]
             )
 
-        # -------------------------------------------
         # Convert yes/no columns
-        # -------------------------------------------
-
         for col in ["default", "housing", "loan"]:
-            if col in prediction_data.columns:
-                prediction_data[col] = prediction_data[col].map(
-                    {
-                        "yes": 1,
-                        "no": 0
-                    }
-                )
+            if col in input_data.columns:
+                input_data[col] = input_data[col].map({
+                    "yes": 1,
+                    "no": 0
+                })
 
-        # -------------------------------------------
         # One Hot Encoding
-        # -------------------------------------------
-
-        prediction_data = pd.get_dummies(
-            prediction_data,
+        input_data = pd.get_dummies(
+            input_data,
             drop_first=True
         )
 
-        # -------------------------------------------
         # Match Training Columns
-        # -------------------------------------------
-
-        prediction_data = prediction_data.reindex(
+        input_data = input_data.reindex(
             columns=feature_columns,
             fill_value=0
         )
 
-        # -------------------------------------------
         # Scaling
-        # -------------------------------------------
-
-        scaled_data = scaler.transform(
-            prediction_data
+        input_scaled = scaler.transform(
+            input_data
         )
 
-        # -------------------------------------------
         # Prediction
-        # -------------------------------------------
-
         probabilities = model.predict(
-            scaled_data
+            input_scaled
         )
 
         predictions = (
             probabilities > 0.5
         ).astype(int)
 
-        # -------------------------------------------
-        # Output
-        # -------------------------------------------
+        # Results
+        results = df.copy()
 
-        results = data.copy()
+        results["Prediction"] = [
+            "Deposit"
+            if p == 1
+            else "No Deposit"
+            for p in predictions.flatten()
+        ]
 
-        results["Prediction"] = predictions
+        results["Probability (%)"] = (
+            probabilities.flatten() * 100
+        ).round(2)
 
-        results["Probability"] = probabilities
+        st.success("Prediction Completed")
 
-        results["Prediction"] = results[
-            "Prediction"
-        ].map(
-            {
-                0: "No Deposit",
-                1: "Deposit"
-            }
-        )
+        # Summary
+        deposit_count = (
+            results["Prediction"]
+            == "Deposit"
+        ).sum()
 
-        st.success("Prediction Completed Successfully")
+        no_deposit_count = (
+            results["Prediction"]
+            == "No Deposit"
+        ).sum()
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.metric(
+                "Deposit Predictions",
+                deposit_count
+            )
+
+        with col2:
+            st.metric(
+                "No Deposit Predictions",
+                no_deposit_count
+            )
 
         st.subheader("Prediction Results")
 
         st.dataframe(results)
 
-        # -------------------------------------------
-        # Download Button
-        # -------------------------------------------
-
+        # Download
         csv = results.to_csv(
             index=False
         ).encode("utf-8")
 
         st.download_button(
-            label="📥 Download Results",
+            label="Download Results",
             data=csv,
-            file_name="bank_predictions.csv",
+            file_name="prediction_results.csv",
             mime="text/csv"
         )
