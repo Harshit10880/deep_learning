@@ -23,7 +23,7 @@ model = load_model("model_deep.keras")
 
 scaler = joblib.load("scaler_deep.pkl")
 
-feature_columns = joblib.load("feature_columns.pkl")
+feature_columns = joblib.load("feature_columns_deep.pkl")
 
 # =====================================================
 # HEADER
